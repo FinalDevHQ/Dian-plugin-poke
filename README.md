@@ -1,661 +1,123 @@
-# Dian 插件开发手册
+# Dian Plugin - 戳一戳 (Poke)
 
 > 适用版本：Dian `0.1.x` · plugin-runtime `0.2.x`
 
-Dian 插件系统基于 TypeScript 装饰器，支持**消息处理、HTTP 路由、指令注册、Web UI**四大能力，插件以 ZIP 包形式安装，事件 Handler 热加载生效。
+检测 OneBot 戳一戳事件，支持多规则自定义响应动作。
 
----
+## 功能
 
-## 目录
+- **事件监听**：群聊 & 私聊戳一戳（戳自己 / 戳别人）
+- **响应动作**：
+  - `poke_back` — 戳回去
+  - `follow` — 跟戳（可指定戳戳人者或被戳者）
+  - `command` — 触发其他插件指令
+  - `message` — 回复自定义消息
+- **规则系统**：多条规则按顺序匹配，每条可独立配置匹配条件、限定群、冷却时间
+- **防回环**：自动跳过机器人自己发起的戳事件
+- **Web UI**：仪表盘统计 / 规则编辑器 / 触发记录
 
-1. [环境准备](#1-环境准备)
-2. [项目结构](#2-项目结构)
-3. [插件声明 @Plugin](#3-插件声明-plugin)
-4. [消息 Handler @Handler](#4-消息-handler-handler)
-5. [拦截器 @Interceptor](#5-拦截器-interceptor)
-6. [onSetup — 高级注册](#6-onsetup--高级注册)
-   - [6.1 HTTP API 路由](#61-http-api-路由)
-   - [6.2 命令式指令](#62-命令式指令)
-   - [6.3 Web UI](#63-web-ui)
-   - [6.4 插件数据源（datasource）](#64-插件数据源datasource)
-7. [EventContext API](#7-eventcontext-api)
-   - [7.1 sendAction — 调用底层 Bot API](#71-sendaction--调用底层-bot-api)
-   - [7.2 PluginStore — 插件专属数据库](#72-pluginstore--插件专属数据库)
-   - [7.3 内置帮助菜单](#73-内置帮助菜单)
-8. [BotEvent 数据结构](#8-botevent-数据结构)
-9. [Bot 作用域（白名单）](#9-bot-作用域白名单)
-10. [构建 & 打包](#10-构建--打包)
-11. [打包策略：bundle vs external（重要）](#11-打包策略bundle-vs-external重要)
-12. [安装方式](#12-安装方式)
-13. [发布到官方插件市场](#13-发布到官方插件市场)
-14. [热重载说明](#14-热重载说明)
-15. [完整示例](#15-完整示例)
+## 平台支持
 
----
+| 平台 | 状态 |
+|------|------|
+| NapCat | 已实现 |
+| LLOneBot | 预留 |
 
-## 1. 环境准备
+## 安装
 
 ```bash
-# 在 Dian 项目根目录先执行一次全量构建
-npm run build
-
-# 进入模板目录安装依赖
-cd Dian-plugin-template
+# 构建
 npm install
-```
-
-修改以下两处，设置你的插件 ID（全局唯一）：
-
-**`package.json`**
-```json
-{ "name": "my-plugin" }
-```
-
-**`src/index.ts`** 中的 `@Plugin`
-```ts
-@Plugin({ name: "my-plugin", ... })
-```
-
-> **注意**：`package.json` 的 `name` 与 `@Plugin` 的 `name` 必须一致，否则打包和 URL 路由会对不上。
-
----
-
-## 2. 项目结构
-
-```
-Dian-plugin-template/
-├── src/
-│   ├── index.ts          ← 插件主入口（装饰器、拦截器、指令注册）
-│   ├── config.ts         ← 配置读写
-│   └── version.ts        ← 版本号（从 package.json 读取）
-├── ui/
-│   ├── App.tsx           ← React 主应用（侧边栏导航）
-│   ├── main.tsx          ← 入口
-│   ├── index.html        ← HTML 入口
-│   ├── index.css         ← 全局样式（Slate 色系）
-│   ├── vite.config.ts    ← Vite 构建配置
-│   ├── components.tsx    ← 通用组件（Card, Button, Badge 等）
-│   └── pages/
-│       ├── Dashboard.tsx  ← 仪表盘（统计 + 已注册信息）
-│       ├── Config.tsx     ← 基础配置编辑
-│       └── Logs.tsx       ← 触发记录
-├── scripts/
-│   └── pack.mjs          ← 打包脚本（基于 fflate，跨平台纯 JS）
-├── package.json
-├── tsconfig.json         ← 后端 TypeScript 配置（含 @types/node）
-└── tsup.config.ts        ← 打包配置（默认 bundle runtime 为单文件）
-```
-
-### 构建产物
-
-```
-dist/
-├── index.js              ← 插件逻辑（已 bundle，含 decorators）
-└── public/               ← Web UI（Vite 构建产物）
-    ├── index.html
-    └── assets/
-        ├── index.js
-        └── index.css
-```
-
-### UI 页面说明
-
-| 页面 | 文件 | 说明 |
-|------|------|------|
-| **仪表盘** | `Dashboard.tsx` | 运行时长、触发次数、已注册的指令/路由/处理器 |
-| **基础配置** | `Config.tsx` | 编辑指令和回复内容 |
-| **触发记录** | `Logs.tsx` | 最近触发记录列表 |
-
----
-
-## 3. 插件声明 @Plugin
-
-每个插件的**默认导出类**必须标注 `@Plugin`，提供插件元信息。
-
-```ts
-import "reflect-metadata";
-import { Plugin } from "@myfinal/plugin-runtime";
-
-@Plugin({
-  name: "my-plugin",          // 必填，全局唯一 ID
-  description: "插件描述",    // 可选，显示在管理界面
-  version: "1.0.0",           // 可选，建议从 version.ts 读取
-  author: "your-name",        // 可选
-  icon: "🔌",                 // 可选，emoji 或图片 URL
-})
-export default class MyPlugin {
-  // ...
-}
-```
-
----
-
-## 4. 消息 Handler @Handler
-
-`@Handler` 标注的方法会在消息文本匹配时被调用，支持**精确字符串**或**正则表达式**匹配。
-
-```ts
-import { Handler, type EventContext } from "@myfinal/plugin-runtime";
-
-// 精确匹配 "!ping"（区分大小写）
-@Handler("!ping")
-async onPing(ctx: EventContext): Promise<void> {
-  console.log("收到 ping，发送者：", ctx.event.payload.senderName);
-}
-
-// 正则匹配，支持捕获组
-@Handler(/^!echo\s+(.+)$/)
-async onEcho(ctx: EventContext): Promise<void> {
-  const text = ctx.event.payload.text ?? "";
-  const [, content] = text.match(/^!echo\s+(.+)$/) ?? [];
-  console.log("echo:", content);
-}
-```
-
-**匹配规则**：
-- 字符串 → 与 `event.payload.text` 完全相等
-- 正则 → `regex.test(event.payload.text ?? "")`
-- 多个 `@Handler` 可以标注在同一个类的不同方法上
-- 若拦截器调用了 `ctx.stopPropagation()`，本 Handler 将不被执行
-
----
-
-## 5. 拦截器 @Interceptor
-
-拦截器在所有 Handler **之前**执行，可用于日志、鉴权、消息过滤等。
-
-```ts
-import { Interceptor, type EventContext } from "@myfinal/plugin-runtime";
-
-@Interceptor(50)   // 数字为优先级，越小越先执行，默认 100
-async filter(ctx: EventContext): Promise<void> {
-  // 屏蔽特定群的所有消息
-  if (ctx.event.payload.groupId === "blocked_group_id") {
-    ctx.stopPropagation();   // 阻止后续所有 Handler
-    return;
-  }
-
-  // 日志记录（不阻止，继续执行后续 Handler）
-  console.log(`[${ctx.event.botId}] ${ctx.event.payload.text}`);
-}
-```
-
----
-
-## 6. onSetup — 高级注册
-
-在类中定义 `onSetup(ctx: PluginSetupContext)` 方法，Dian 在加载插件时会调用它，用于注册 HTTP 路由、指令和 UI。
-
-```ts
-import { type PluginSetupContext } from "@myfinal/plugin-runtime";
-
-onSetup(ctx: PluginSetupContext): void {
-  // 见下文各小节
-}
-```
-
-### 6.1 HTTP API 路由
-
-```ts
-ctx.route(method, path, handler);
-```
-
-- **访问地址**：`/plugins/<name>/api<path>`
-- `method`：`"GET"` `"POST"` `"PUT"` `"DELETE"` `"PATCH"`
-- `handler`：Fastify 路由处理函数 `(request, reply) => void`
-
-```ts
-// GET /plugins/my-plugin/api/status
-ctx.route("GET", "/status", (_req, reply) => {
-  reply.send({ ok: true, ts: Date.now() });
-});
-
-// POST /plugins/my-plugin/api/config
-ctx.route("POST", "/config", (req, reply) => {
-  const body = req.body as { key: string; value: string };
-  // ... 保存配置
-  reply.send({ saved: true });
-});
-```
-
-> **注意**：HTTP 路由在**服务器启动时**注册，安装后需**重启 Dian 服务**才能生效。事件 Handler 和指令支持热加载，无需重启。
-
-### 6.2 命令式指令
-
-等同于 `@Handler`，但额外携带 `name` 和 `description` 用于在管理界面展示。支持 `category`（分类名）和 `children`（子命令）用于帮助菜单树状展示。
-
-```ts
-ctx.command({
-  name: "!ping",             // 显示名
-  pattern: "!ping",          // 匹配字符串，也可传 RegExp 或 () => RegExp|string
-  description: "回复 pong",  // 可选，管理界面展示
-  category: "趣味",          // 可选，分类名，帮助菜单中按此分组
-  children: [                // 可选，子命令列表，用于树状菜单
-    { name: "!ping stats", pattern: "!ping stats", description: "查看统计" },
-  ],
-  async handler(c: EventContext) {
-    await c.reply("Hello!");
-  },
-});
-```
-
-> `pattern` 也可以传**函数** `() => this.config.command`，每次匹配时实时求值，实现"配置即改即生效"，无需重启服务。
-
-### 6.3 Web UI
-
-将静态文件放到 `ui/` 目录，构建后会输出到 `dist/public/`：
-
-```ts
-ctx.ui({
-  staticDir: "./public",   // 相对于 dist/index.js 的目录
-  entry: "index.html",     // 入口文件，默认 index.html
-});
-```
-
-- **访问地址**：`/plugins/<name>/ui/`
-- 管理界面的「插件界面」区域会以 **iframe** 嵌入此地址
-- 页面内可以用相对路径调用插件自己的 API：
-
-```js
-// 在 ui/pages/Dashboard.tsx 内
-const API = "/plugins/my-plugin/api"
-const data = await fetch(`${API}/status`).then(r => r.json());
-```
-
-#### UI 开发指南
-
-模板使用 **React + Tailwind CSS + Vite**：
-
-```bash
-# 前端开发模式（Vite dev server）
-npm run dev:ui
-
-# 后端开发模式（监听变动）
-npm run dev:plugin
-
-# 全量构建
-npm run build
-```
-
-目录结构：
-```
-ui/
-├── App.tsx           ← 侧边栏导航 + 路由
-├── components.tsx    ← 通用组件（Card, Button, Badge, Input 等）
-├── pages/
-│   ├── Dashboard.tsx ← 仪表盘
-│   ├── Config.tsx    ← 配置编辑
-│   └── Logs.tsx      ← 触发记录
-└── index.css         ← 全局样式
-```
-
-### 6.4 插件数据源（datasource）
-
-注册插件专属的 SQLite 数据库，框架会自动将其注册到 DatabaseExplorer，在数据库查看器中以独立数据源展示。
-
-```ts
-import { resolve } from "node:path";
-
-onSetup(ctx: PluginSetupContext): void {
-  ctx.datasource(
-    "my-plugin",                                    // 数据源名称
-    resolve(process.cwd(), "data", "my-plugin.db"), // SQLite 文件绝对路径
-  );
-}
-```
-
----
-
-## 7. EventContext API
-
-```ts
-interface EventContext {
-  /** 当前事件 */
-  readonly event: BotEvent;
-
-  /** 阻止当前事件继续向后续 Handler 传递 */
-  stopPropagation(): void;
-
-  /** 向事件来源（群/私聊）发送文本回复 */
-  reply(text: string): Promise<void>;
-
-  /** 调用底层平台 API（OneBot/飞书等） */
-  sendAction(action: string, params?: Record<string, unknown>): Promise<ActionResult>;
-
-  /** 插件存储接口，用于创建和操作插件专属的 SQLite 表 */
-  store?: PluginStore;
-}
-```
-
-### 7.1 sendAction — 调用底层 Bot API
-
-`sendAction` 让你的插件可以直接调用 Bot 协议 API（如 OneBot），实现**禁言、踢人、取群成员列表**等高级操作。
-
-```ts
-@Handler("!mute")
-async onMute(ctx: EventContext): Promise<void> {
-  if (!ctx.event.payload.groupId) {
-    await ctx.reply("此指令只能在群聊中使用");
-    return;
-  }
-
-  const result = await ctx.sendAction("set_group_ban", {
-    group_id: Number(ctx.event.payload.groupId),
-    user_id:  123456789,
-    duration: 60,
-  });
-
-  if (result.ok) {
-    await ctx.reply("已禁言 60 秒");
-  } else {
-    await ctx.reply(`操作失败: ${result.message ?? "未知错误"}`);
-  }
-}
-```
-
-> `sendAction` 的返回值类型为 `ActionResult`：`{ ok: boolean; status: "ok" | "failed" | "timeout"; retcode?: number; message?: string; data?: T }`。
-
-### 7.2 PluginStore — 插件专属数据库
-
-`PluginStore` 提供简单的 SQLite 操作接口，无需额外配置，即可创建表和写入/查询数据。
-
-```ts
-interface PluginStore {
-  createTable(tableName: string, columns: string[]): Promise<void>;
-  insert(tableName: string, data: Record<string, unknown>): Promise<void>;
-  query(tableName: string, params?: Record<string, unknown>, options?: {
-    limit?: number;
-    orderBy?: string;
-    order?: "ASC" | "DESC";
-  }): Promise<Record<string, unknown>[]>;
-  delete(tableName: string, params?: Record<string, unknown>): Promise<number>;
-}
-```
-
-使用示例：
-
-```ts
-export default class MyPlugin {
-  onSetup(ctx: PluginSetupContext): void {
-    ctx.command({
-      name: "!record",
-      pattern: /^!record\s+(.+)$/,
-      description: "记录一条数据到插件数据库",
-      handler: async (c: EventContext) => {
-        if (!c.store) return;
-
-        const text = c.event.payload.text ?? "";
-        const [, content] = text.match(/^!record\s+(.+)$/) ?? [];
-
-        await c.store.createTable("my_notes", [
-          "id INTEGER PRIMARY KEY AUTOINCREMENT",
-          "content TEXT",
-          "user_id TEXT",
-          "created_at INTEGER",
-        ]);
-
-        await c.store.insert("my_notes", {
-          content: content ?? "",
-          user_id: c.event.payload.userId ?? "",
-          created_at: Date.now(),
-        });
-
-        await c.reply("已记录！");
-      },
-    });
-  }
-}
-```
-
-### 7.3 内置帮助菜单
-
-框架内置了帮助菜单功能：当用户在群里输入 `菜单`、`help` 或 `帮助` 时，会自动触发已注册指令的树状展示。
-
-输出的帮助菜单会根据 `command.category` 进行分组：
-
-```
-📋 可用命令：
-├─ 趣味
-│  ├ !hello - 回复 "Hello World!"
-│  └ !joke - 讲个笑话
-├─ 管理
-│  └ !mute - 禁言用户（需管理员权限）
-└ !help - 显示帮助
-```
-
----
-
-## 8. BotEvent 数据结构
-
-```ts
-interface BotEvent {
-  eventId:   string;
-  botId:     string;
-  platform:  "onebot";
-  type:      "message" | "message_sent" | "notice" | "request" | "meta_event";
-  subtype:   string;
-  timestamp: number;
-  payload: EventPayload;
-  raw: unknown;
-}
-```
-
-### EventPayload
-
-```ts
-interface EventPayload {
-  text?:        string;
-  userId?:      string;
-  groupId?:     string;
-  channelId?:   string;
-  messageId?:   string;
-  senderName?:  string;
-  [key: string]: unknown;
-}
-```
-
----
-
-## 9. Bot 作用域（白名单）
-
-Dian 支持为每个插件设置允许响哪些 Bot 的消息。默认空列表 = **拒绝所有 Bot**。
-
-在管理界面（插件列表 → 点击插件 → Bot 作用域）可以配置。
-
----
-
-## 10. 构建 & 打包
-
-```bash
-# 前端开发模式
-npm run dev:ui
-
-# 后端开发模式（监听变动）
-npm run dev:plugin
-
-# 全量构建（后端 tsup + 前端 vite）
 npm run build
 
-# 构建 + 打包为 ZIP
+# 打包
 npm run pack
 ```
 
-`npm run pack` 生成 `<name>.zip`，ZIP 内容即为 `dist/` 目录：
+将生成的 `poke.zip` 上传到 Dian 管理界面 → 插件模块 → 上传安装。
+
+## 项目结构
 
 ```
-my-plugin.zip/
-├── index.js
-└── public/
-    ├── index.html
-    └── assets/
-        ├── index.js
-        └── index.css
+src/
+├── index.ts          ← 插件主入口（拦截器 + API 路由 + UI 注册）
+├── config.ts         ← 配置结构定义 & 读写
+├── dispatcher.ts     ← 动作分发器
+├── platform.ts       ← 平台抽象（NapCat group_poke / friend_poke）
+├── cooldown.ts       ← 冷却管理器
+├── log-store.ts      ← 事件日志存储
+└── version.ts        ← 版本号
+
+ui/
+├── App.tsx           ← 侧边栏导航
+├── components.tsx    ← 通用组件
+└── pages/
+    ├── Dashboard.tsx ← 仪表盘（统计 + 实时动态）
+    ├── Config.tsx    ← 规则编辑器
+    └── Logs.tsx      ← 触发记录
 ```
 
----
+## 配置结构
 
-## 11. 打包策略：bundle vs external（重要）
+```typescript
+interface PokeConfig {
+  globalCooldown: number;     // 全局冷却（秒），0 = 不限制
+  disabledGroups: string[];   // 禁用群号
+  blacklist: string[];        // 用户黑名单（QQ 号）
+  rules: PokeRule[];
+}
 
-### 默认行为
-
-模板默认把 `@myfinal/plugin-runtime` **打包进** `dist/index.js`（`tsup.config.ts` 中的 `noExternal`）。
-
-适用于**绝大多数业务插件**：
-
-- 装饰器元数据 key 是 `Symbol.for("dian:plugin")`，跨 bundle 共享
-- `EventContext` `PluginSetupContext` 等是 TypeScript 类型，编译后被擦除
-- `ctx.command()` `ctx.route()` `ctx.ui()` 是 `onSetup` 时通过参数注入的回调
-
-### 什么时候必须改为 external？
-
-**当且仅当**你的插件 `import` 了 `pluginManager`：
-
-```ts
-import { pluginManager } from "@myfinal/plugin-runtime";
-
-// ❌ 默认配置下，这里读到的是 bundle 里的空单例
-pluginManager.listPluginsMeta();
-```
-
-**修复**：改 `tsup.config.ts`：
-
-```ts
-export default defineConfig({
-  external:   ["@myfinal/plugin-runtime"],   // ← 由宿主提供，运行时共享单例
-  noExternal: ["reflect-metadata"],
-});
-```
-
-### 速查表
-
-| 你的插件用到了哪些 API | 推荐配置 |
-|---|---|
-| 仅用 `@Plugin` / `@Handler` / `@Interceptor` | 默认 `noExternal` |
-| `onSetup` + `ctx.command/route/ui` | 默认 `noExternal` |
-| `import { pluginManager }` 调用其方法 | **必须** `external` |
-
----
-
-## 12. 安装方式
-
-### 方式一：管理界面上传（推荐）
-
-1. 打开 Dian 管理界面 → **插件模块**
-2. 点击左上角 **⬆ 上传**图标
-3. 拖入或选择 `<name>.zip`
-4. 点击 **安装**
-
-### 方式二：手动解压
-
-将 ZIP 解压到 `plugins/<name>/` 目录。
-
----
-
-## 13. 发布到官方插件市场
-
-### 13.1 准备 ZIP 直链
-
-1. 推代码到 GitHub 仓库（推荐 fork [`FinalDevHQ/Dian-plugin-template`](https://github.com/FinalDevHQ/Dian-plugin-template)）
-2. 修改 `package.json` 的 `name` / `version` / `description`
-3. 推送 tag（如 `v1.0.0`），`release.yml` 自动构建并上传 ZIP 到 Release
-4. 复制 ZIP 下载直链
-
-### 13.2 向索引库提 PR
-
-1. Fork [`FinalDevHQ/Dian-plugins`](https://github.com/FinalDevHQ/Dian-plugins)
-2. 在 `index.json` 追加插件条目
-3. 提 PR，标题：`feat: add plugin <name> v<version>`
-
-### 13.3 发布新版本
-
-1. 推新 tag（`v1.1.0`），等待 release.yml 上传新 ZIP
-2. 向 `Dian-plugins` 提 PR，更新 version / downloadUrl / changelog
-3. PR 标题：`chore: bump <name> to v<version>`
-
----
-
-## 14. 热重载说明
-
-| 功能 | 热加载 | 说明 |
-|---|---|---|
-| `@Handler` 消息处理 | ✅ 即时生效 | 无需任何操作 |
-| `@Interceptor` 拦截器 | ✅ 即时生效 | 无需任何操作 |
-| `ctx.command` 指令 | ✅ 即时生效 | 无需任何操作 |
-| `ctx.route` HTTP 路由 | ❌ 需重启 | Fastify 不支持运行时动态注册 |
-| `ctx.ui` Web UI | ❌ 需重启 | 静态 serve 在启动时注册 |
-
----
-
-## 15. 完整示例
-
-```ts
-import "reflect-metadata";
-import {
-  Plugin,
-  Handler,
-  Interceptor,
-  type EventContext,
-  type PluginSetupContext,
-} from "@myfinal/plugin-runtime";
-
-@Plugin({
-  name: "my-plugin",
-  description: "示例插件",
-  version: "1.0.0",
-  author: "your-name",
-  icon: "🔌",
-})
-export default class MyPlugin {
-  @Interceptor(10)
-  async log(ctx: EventContext): Promise<void> {
-    const { type, payload, platform } = ctx.event;
-    if (type === "message") {
-      console.log(`[my-plugin] [${platform}] <${payload.senderName}> ${payload.text}`);
-    }
-  }
-
-  @Handler("!ping")
-  async onPing(ctx: EventContext): Promise<void> {
-    await ctx.reply("Hello!");
-  }
-
-  @Handler(/^!repeat\s+(.+)$/)
-  async onRepeat(ctx: EventContext): Promise<void> {
-    const [, content] = (ctx.event.payload.text ?? "").match(/^!repeat\s+(.+)$/) ?? [];
-    await ctx.reply(content);
-  }
-
-  @Handler("!mute")
-  async onMute(ctx: EventContext): Promise<void> {
-    if (!ctx.event.payload.groupId) {
-      await ctx.reply("此指令只能在群聊中使用");
-      return;
-    }
-    const result = await ctx.sendAction("set_group_ban", {
-      group_id: Number(ctx.event.payload.groupId),
-      user_id: Number(ctx.event.payload.userId),
-      duration: 60,
-    });
-    await ctx.reply(result.ok ? "已禁言 60 秒" : `操作失败: ${result.message ?? ""}`);
-  }
-
-  onSetup(ctx: PluginSetupContext): void {
-    ctx.route("GET", "/status", (_req, reply) => {
-      reply.send({ ok: true, plugin: "my-plugin" });
-    });
-
-    ctx.command({
-      name: "!help",
-      pattern: "!help",
-      description: "显示帮助",
-      category: "工具",
-      async handler(c) {
-        await c.reply("可用指令：!ping, !repeat <内容>, !mute");
-      },
-    });
-
-    ctx.datasource("my-plugin", "/path/to/my-plugin.db");
-    ctx.ui({ staticDir: "./public", entry: "index.html" });
-  }
+interface PokeRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  matchSelf: boolean;         // 匹配：别人戳机器人
+  matchOthers: boolean;       // 匹配：别人戳别人
+  groupIds: string[];         // 限定群（空 = 所有群）
+  action: "poke_back" | "follow" | "command" | "message";
+  followTarget: "poker" | "targeted";  // 跟戳时的目标
+  commandText: string;        // 触发指令文本
+  messageText: string;        // 回复消息内容
+  cooldown: number;           // 独立冷却（秒），0 = 使用全局
 }
 ```
+
+## API 路由
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/status` | 统计 + 配置 + 最近日志 |
+| POST | `/api/config` | 保存完整配置 |
+| GET | `/api/logs?limit=50` | 历史日志 |
+| GET | `/api/groups` | 可用群列表（远程 + 缓存） |
+
+> 所有路由访问地址：`/plugins/poke/api/...`
+
+## Web UI
+
+- **仪表盘** `/plugins/poke/ui/` — 总触发次数、今日触发、规则状态、实时动态
+- **规则配置** — 全局冷却/黑名单/禁用群 + 规则增删改（彩色边框标识动作类型）
+- **触发记录** — 按条件筛选（全部 / 戳我 / 戳别人），10 秒自动刷新
+
+## 戳事件识别
+
+插件通过 `@Interceptor` 拦截所有事件，根据以下条件识别戳一戳：
+
+```typescript
+event.type === "notice"
+event.raw.notice_type === "notify"
+event.raw.sub_type === "poke"
+```
+
+防回环检查：`user_id === self_id` 时跳过（机器人自己戳的）。
+
+## NapCat API
+
+- **群戳一戳**：`sendAction("group_poke", { group_id, user_id })`
+- **私聊戳一戳**：`sendAction("friend_poke", { user_id })`
+
+## 跨插件指令触发
+
+通过构造合成 `BotEvent`（`type: "message"`）并调用 `pluginManager.dispatch()` 走完整派发管道，可触发任意插件的指令。
+
+需要 `external: ["@myfinal/plugin-runtime"]` 配置（已包含在 `tsup.config.ts` 中）。

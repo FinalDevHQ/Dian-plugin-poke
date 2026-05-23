@@ -1,7 +1,7 @@
 {
-  "name": "hello-world",
+  "name": "poke",
   "version": "1.0.0",
-  "description": "Dian 插件模板 — Hello World",
+  "description": "Dian 戳一戳插件 — 检测戳事件并执行自定义动作",
   "type": "module",
   "scripts": {
     "build": "tsup && vite build --config ui/vite.config.ts",

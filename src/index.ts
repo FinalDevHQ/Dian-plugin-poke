@@ -1,148 +1,147 @@
 import "reflect-metadata";
 import {
   Plugin,
-  Handler,
   Interceptor,
   type EventContext,
   type PluginSetupContext,
 } from "@myfinal/plugin-runtime";
-
+import type { ActionResult } from "@myfinal/shared";
 import { PKG_VERSION } from "./version.js";
-import { type Config, loadConfig, saveConfig } from "./config.js";
+import { type PokeConfig, type PokeRule, loadConfig, saveConfig } from "./config.js";
+import { ActionDispatcher, type PokeInfo } from "./dispatcher.js";
+import { CooldownManager } from "./cooldown.js";
+import { LogStore, type PokeLogEntry } from "./log-store.js";
+
+const PLUGIN_NAME = "poke";
+const API_PREFIX = `/plugins/${PLUGIN_NAME}/api`;
 
 @Plugin({
-  name: "hello-world",
-  description: "Dian 插件模板 — Hello World",
+  name: PLUGIN_NAME,
+  description: "戳一戳插件 — 检测戳事件并执行自定义动作",
   version: PKG_VERSION,
   author: "your-name",
-  icon: "👋",
+  icon: "👉",
 })
-export default class PingPongPlugin {
-  /** 插件加载时间（服务端时间戳，毫秒） */
+export default class PokePlugin {
   private readonly startTime = Date.now();
 
-  /** 运行时配置（可通过 Web UI 修改 reply，修改 command 需重启） */
-  private config = loadConfig();
+  private config: PokeConfig = loadConfig();
+  private cooldown = new CooldownManager();
+  private logStore = new LogStore();
+  private dispatcher = new ActionDispatcher(this.logStore);
+  private knownGroups = new Set<string>();
+  private botSendActions = new Map<string, (action: string, params?: Record<string, unknown>) => Promise<ActionResult>>();
 
-  /** 收到指令的累计次数 */
-  private pingCount = 0;
-
-  /** 最近触发记录（最多保留 50 条） */
-  private recentPings: Array<{
-    sender: string;
-    userId?: string;
-    group?: string;
-    platform?: string;
-    time: number;
-  }> = [];
-
-  // ── 事件处理器示例（@Handler，静态 pattern 匹配消息文本） ────────────────
-  // @Handler 接收 string（精确匹配）、RegExp 或返回它们的函数（动态 pattern）。
-  // 与 ctx.command() 的区别：pattern 在类加载时即确定，不支持运行时热更新；
-  // 若需要"改配置立即生效"的动态指令，请用 onSetup 里的 ctx.command()。
-  @Handler(/^#?help$/i)
-  async onHelp(ctx: EventContext): Promise<void> {
-    const uptime = Math.floor((Date.now() - this.startTime) / 1000);
-    await ctx.reply(
-      `📖 Hello World 插件\n` +
-      `触发词：${this.config.command}  →  ${this.config.reply}\n` +
-      `已运行：${uptime} 秒 | 累计触发：${this.pingCount} 次`
-    );
-  }
-
-  // ── 拦截器示例（最先执行，可用于日志、鉴权、过滤） ─────────────────────
   @Interceptor(10)
-  async logInterceptor(ctx: EventContext): Promise<void> {
-    if (ctx.event.type === "message") {
-      console.log(
-        `[hello-world] <${ctx.event.platform}> ${ctx.event.payload.senderName ?? "?"}: ${ctx.event.payload.text ?? ""}`
-      );
+  async pokeInterceptor(ctx: EventContext): Promise<void> {
+    // 缓存该 bot 的 sendAction，用于后续 API 调用（如 get_group_list）
+    if (!this.botSendActions.has(ctx.event.botId)) {
+      this.botSendActions.set(ctx.event.botId, ctx.sendAction);
+    }
+
+    // 收集群ID
+    if (ctx.event.payload.groupId) {
+      this.knownGroups.add(ctx.event.payload.groupId);
+    }
+
+    const event = ctx.event;
+    if (event.type !== "notice") return;
+
+    const raw = event.raw as Record<string, unknown>;
+    if (raw.notice_type !== "notify" || raw.sub_type !== "poke") return;
+
+    const selfId = String(raw.self_id ?? "");
+    const pokerId = String(raw.user_id ?? "");
+    const targetId = String(raw.target_id ?? "");
+    const groupId = event.payload.groupId;
+    const isSelfPoke = targetId === selfId;
+    const botId = ctx.event.botId;
+
+    if (!pokerId) return;
+    if (pokerId === selfId) return; // 跳过机器人自己戳的，防回环
+    if (this.config.blacklist.includes(pokerId)) return;
+    if (groupId && this.config.disabledGroups.includes(groupId)) return;
+
+    const info: PokeInfo = { pokerId, targetId, groupId, isSelfPoke, botId };
+
+    for (const rule of this.config.rules) {
+      if (!rule.enabled) continue;
+      if (rule.matchSelf && !isSelfPoke) continue;
+      if (rule.matchOthers && isSelfPoke) continue;
+      if (rule.groupIds.length > 0 && !groupId) continue;
+      if (rule.groupIds.length > 0 && groupId && !rule.groupIds.includes(groupId)) continue;
+
+      const cd = rule.cooldown > 0 ? rule.cooldown : this.config.globalCooldown;
+      if (this.cooldown.isOnCooldown(pokerId, rule.id)) continue;
+
+      try {
+        await this.dispatcher.execute(rule, ctx, info);
+      } catch (e) {
+        console.error(`[poke] execute rule ${rule.id} failed:`, e);
+      }
+
+      this.cooldown.set(pokerId, rule.id, cd);
     }
   }
 
   onSetup(ctx: PluginSetupContext): void {
-    // ── 注册指令（带分类，用于帮助菜单分组展示） ───────────────────────────
-    ctx.command({
-      name: this.config.command,
-      pattern: () => this.config.command,
-      description: `回复 "${this.config.reply}"`,
-      category: "趣味",  // 分类名，帮助菜单中按分类分组
-      handler: async (c: EventContext) => {
-        this.pingCount++;
-        this.recentPings.unshift({
-          sender: c.event.payload.senderName ?? "unknown",
-          userId: c.event.payload.userId,
-          group: c.event.payload.groupId,
-          platform: c.event.platform,
-          time: c.event.timestamp,
-        });
-        if (this.recentPings.length > 50) this.recentPings.pop();
-
-        console.log(
-          `[hello-world] ${c.event.payload.senderName ?? "?"} ` +
-          `→ "${this.config.reply}"`
-        );
-        await c.reply(this.config.reply);
-      },
-    });
-
-    // ── sendAction 示例：调用底层 Bot API ───────────────────────────────────
-    // sendAction 用于调用底层平台 API（如 OneBot 的 send_group_msg、set_group_ban 等）。
-    // 这里注册一个 !mute 指令作为示例（需要 Bot 有管理员权限）。
-    ctx.command({
-      name: "mute",
-      pattern: () => this.config.muteCommand,
-      description: `禁言发送者 ${this.config.muteDuration} 秒（示例，需 Bot 有管理员权限）`,
-      category: "管理",
-      handler: async (c: EventContext) => {
-        if (!c.event.payload.groupId) {
-          await c.reply("此指令只能在群聊中使用");
-          return;
-        }
-        // 调用 OneBot API 执行禁言
-        const result = await c.sendAction("set_group_ban", {
-          group_id: Number(c.event.payload.groupId),
-          user_id: Number(c.event.payload.userId),
-          duration: this.config.muteDuration,
-        });
-        if (result.ok) {
-          await c.reply(`已禁言 ${this.config.muteDuration} 秒`);
-        } else {
-          await c.reply(`操作失败: ${result.message ?? "未知错误"}`);
-        }
-      },
-    });
-
-    // ── GET /plugins/hello-world/api/status ────────────────────────────────────
     ctx.route("GET", "/status", (_req, reply) => {
+      const now = Date.now();
+      const todayStart = new Date().setHours(0, 0, 0, 0);
       reply.send({
         startTime: this.startTime,
-        pingCount: this.pingCount,
+        totalCount: this.logStore.countSince(0),
+        todayCount: this.logStore.countSince(todayStart),
         config: this.config,
-        recentPings: this.recentPings.slice(0, 10),
+        recentLogs: this.logStore.recent(10),
+        rulesCount: this.config.rules.length,
+        enabledRulesCount: this.config.rules.filter((r) => r.enabled).length,
       });
     });
 
-    // ── POST /plugins/hello-world/api/config ───────────────────────────────────
     ctx.route("POST", "/config", (req, reply) => {
-      const body = req.body as Partial<Config>;
-      if (typeof body.reply === "string" && body.reply.trim()) {
-        this.config.reply = body.reply.trim();
+      const body = req.body as Partial<PokeConfig>;
+      if (body.globalCooldown !== undefined && body.globalCooldown >= 0) {
+        this.config.globalCooldown = body.globalCooldown;
       }
-      if (typeof body.command === "string" && body.command.trim()) {
-        this.config.command = body.command.trim();
+      if (Array.isArray(body.disabledGroups)) {
+        this.config.disabledGroups = body.disabledGroups;
       }
-      if (typeof body.muteCommand === "string" && body.muteCommand.trim()) {
-        this.config.muteCommand = body.muteCommand.trim();
+      if (Array.isArray(body.blacklist)) {
+        this.config.blacklist = body.blacklist;
       }
-      if (typeof body.muteDuration === "number" && body.muteDuration > 0) {
-        this.config.muteDuration = Math.floor(body.muteDuration);
+      if (Array.isArray(body.rules)) {
+        this.config.rules = body.rules as PokeRule[];
       }
       saveConfig(this.config);
+      this.cooldown.clear();
       reply.send({ ok: true, config: this.config });
     });
 
-    // ── Web UI ───────────────────────────────────────────────────────────────
+    ctx.route("GET", "/logs", (_req, reply) => {
+      const limit = Number((_req.query as Record<string, string>)?.limit) || 50;
+      reply.send({ logs: this.logStore.recent(limit) });
+    });
+
+    ctx.route("GET", "/groups", async (_req, reply) => {
+      const groups = Array.from(this.knownGroups).sort();
+      if (this.botSendActions.size > 0) {
+        const sendAction = this.botSendActions.values().next().value;
+        const result = await sendAction("get_group_list", {});
+        if (result.ok && Array.isArray(result.data)) {
+          const remoteGroups = (result.data as Array<{ group_id: number }>)
+            .map((g) => String(g.group_id))
+            .filter((id) => !groups.includes(id));
+          for (const id of remoteGroups) {
+            this.knownGroups.add(id);
+            groups.push(id);
+          }
+          groups.sort();
+        }
+      }
+      reply.send({ groups });
+    });
+
     ctx.ui({ staticDir: "./public", entry: "index.html" });
   }
 }

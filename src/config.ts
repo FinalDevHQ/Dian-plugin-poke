@@ -5,29 +5,43 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = resolve(__dirname, "config.json");
 
-export interface Config {
-  command: string;      // 触发指令，默认 !hello
-  reply: string;        // 回复内容，默认 Hello World!
-  muteCommand: string;  // !mute 触发指令，默认 !mute
-  muteDuration: number; // !mute 禁言时长（秒），默认 60
+export interface PokeRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  matchSelf: boolean;
+  matchOthers: boolean;
+  groupIds: string[];
+  action: "poke_back" | "follow" | "command" | "message";
+  followTarget: "poker" | "targeted";
+  commandText: string;
+  messageText: string;
+  cooldown: number;
 }
 
-export const DEFAULTS: Config = {
-  command: "!hello",
-  reply: "Hello World!",
-  muteCommand: "!mute",
-  muteDuration: 60,
+export interface PokeConfig {
+  globalCooldown: number;
+  rules: PokeRule[];
+  disabledGroups: string[];
+  blacklist: string[];
+}
+
+export const DEFAULTS: PokeConfig = {
+  globalCooldown: 5,
+  rules: [],
+  disabledGroups: [],
+  blacklist: [],
 };
 
-export function loadConfig(): Config {
+export function loadConfig(): PokeConfig {
   try {
     if (existsSync(CONFIG_PATH)) {
-      return { ...DEFAULTS, ...JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Config };
+      return { ...DEFAULTS, ...JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as PokeConfig };
     }
-  } catch { /* 读取失败时使用默认值 */ }
+  } catch { /* ignore */ }
   return { ...DEFAULTS };
 }
 
-export function saveConfig(cfg: Config): void {
+export function saveConfig(cfg: PokeConfig): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
 }

@@ -78,37 +78,58 @@ export function StatCard({ label, value, mono = false, icon }: {
   )
 }
 
-export function RegSection({ title, count, empty, children }: {
-  title: string; count: number; empty: string; children: ReactNode
+export function Toggle({ checked, onChange, label }: {
+  checked: boolean; onChange: (v: boolean) => void; label?: string
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-700">{title}</span>
-        <span className="text-[10px] tabular-nums text-slate-400">{count}</span>
-      </div>
-      {count === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-[11px] text-slate-400">
-          {empty}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-1.5">{children}</div>
-      )}
-    </div>
+    <label className="inline-flex items-center gap-2 cursor-pointer">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+          checked ? "bg-slate-900" : "bg-slate-200"
+        }`}
+      >
+        <span className={`pointer-events-none inline-block size-4 rounded-full bg-white shadow-sm ring-0 transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0"
+        }`} />
+      </button>
+      {label && <span className="text-sm text-slate-600">{label}</span>}
+    </label>
   )
 }
 
-export function MethodBadge({ method }: { method: string }) {
-  const cls: Record<string, string> = {
-    GET:    "border-emerald-200 bg-emerald-50 text-emerald-700",
-    POST:   "border-blue-200 bg-blue-50 text-blue-700",
-    PUT:    "border-amber-200 bg-amber-50 text-amber-700",
-    PATCH:  "border-violet-200 bg-violet-50 text-violet-700",
-    DELETE: "border-red-200 bg-red-50 text-red-700",
-  }
+interface SelectOption { value: string; label: string }
+export function Select({ value, onChange, options, className = "" }: {
+  value: string; onChange: (v: string) => void; options: SelectOption[]; className?: string
+}) {
   return (
-    <Badge className={`shrink-0 font-mono ${cls[method] ?? ""}`}>
-      {method}
-    </Badge>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
+export function Checkbox({ checked, onChange, label }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string
+}) {
+  return (
+    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 rounded border-slate-300 text-slate-900 focus:ring-slate-300"
+      />
+      <span className="text-sm text-slate-700">{label}</span>
+    </label>
   )
 }

@@ -46,9 +46,9 @@ export default defineConfig({
 
   // 默认：把 runtime 打进 bundle，单文件可移植。
   // 若插件用到 pluginManager 单例，请改为下方注释里的 external 配置。
-  noExternal: ["@myfinal/plugin-runtime", "reflect-metadata"],
-  // external: ["@myfinal/plugin-runtime"],
-  // noExternal: ["reflect-metadata"],
+  // noExternal: ["@myfinal/plugin-runtime", "reflect-metadata"],
+  external: ["@myfinal/plugin-runtime"],
+  noExternal: ["reflect-metadata"],
 
   // UI 由 Vite 单独构建到 dist/public/，此处无需 cpSync
 });
