@@ -142,6 +142,37 @@ export default class PokePlugin {
       reply.send({ groups });
     });
 
+    ctx.command({
+      name: "poke",
+      segment: "poke",
+      aliases: ["戳一戳", "戳", "poke", "戳我"],
+      description: "戳一戳插件",
+      category: "趣味",
+      order: 50,
+      children: [
+        {
+          name: "状态",
+          segment: "status",
+          aliases: ["status", "运行状态", "stats"],
+          pattern: /戳一戳状态|poke status/i,
+          description: "查看戳一戳插件运行状态",
+          usage: "戳一戳状态",
+          examples: ["戳一戳状态"],
+          order: 10,
+          handler: async (c: EventContext) => {
+            const now = Date.now();
+            const todayStart = new Date().setHours(0, 0, 0, 0);
+            await c.reply(
+              `👉 戳一戳状态\n` +
+              `触发总数：${this.logStore.countSince(0)}\n` +
+              `今日触发：${this.logStore.countSince(todayStart)}\n` +
+              `规则数量：${this.config.rules.length}（${this.config.rules.filter((r) => r.enabled).length} 启用）`
+            );
+          },
+        },
+      ],
+    });
+
     ctx.ui({ staticDir: "./public", entry: "index.html" });
   }
 }

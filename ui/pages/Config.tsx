@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardHeader, CardContent, Label, Input, Button, Toggle, Select, Checkbox } from "../components"
-
-const API = "/plugins/poke/api"
+import { API, apiFetch } from "../api"
 
 interface PokeRule {
   id: string
@@ -95,7 +94,7 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
   const fetchGroups = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch(`${API}/groups`).then((r2) => r2.json()) as { groups: string[] }
+      const r = await apiFetch(`${API}/groups`).then((r2) => r2.json()) as { groups: string[] }
       setGroups(r.groups || [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -167,7 +166,7 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/status`).then((r) => r.json()) as { config: PokeConfig }
+      const r = await apiFetch(`${API}/status`).then((r) => r.json()) as { config: PokeConfig }
       setCfg(r.config)
     } catch { /* ignore */ }
   }, [])
@@ -216,9 +215,8 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
     if (!cfg) return
     setSaving(true)
     try {
-      const r = await fetch(`${API}/config`, {
+      const r = await apiFetch(`${API}/config`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cfg),
       })
       const res = await r.json()

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardHeader, CardContent, Label, Badge } from "../components"
-
-const API = "/plugins/poke/api"
+import { API, apiFetch } from "../api"
 
 interface PokeLogEntry {
   time: number
@@ -58,7 +57,7 @@ export default function Dashboard() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/status`).then((r) => r.json()) as Status
+      const r = await apiFetch(`${API}/status`).then((r) => r.json()) as Status
       setStatus(r)
     } catch { /* ignore */ }
   }, [])
