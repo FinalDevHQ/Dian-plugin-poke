@@ -7,13 +7,13 @@ import {
 } from "@myfinal/plugin-runtime";
 import type { ActionResult } from "@myfinal/shared";
 import { PKG_VERSION } from "./version.js";
-import { type PokeConfig, type PokeRule, loadConfig, saveConfig } from "./config.js";
+import { type PokeConfig, type PokeRule, DEFAULTS } from "./config.js";
 import { ActionDispatcher, type PokeInfo } from "./dispatcher.js";
 import { CooldownManager } from "./cooldown.js";
-import { LogStore, type PokeLogEntry } from "./log-store.js";
+import { LogStore } from "./log-store.js";
+import { PokeStore } from "./store.js";
 
 const PLUGIN_NAME = "poke";
-const API_PREFIX = `/plugins/${PLUGIN_NAME}/api`;
 
 @Plugin({
   name: PLUGIN_NAME,
@@ -25,12 +25,31 @@ const API_PREFIX = `/plugins/${PLUGIN_NAME}/api`;
 export default class PokePlugin {
   private readonly startTime = Date.now();
 
-  private config: PokeConfig = loadConfig();
+  private config: PokeConfig = { ...DEFAULTS };
   private cooldown = new CooldownManager();
   private logStore = new LogStore();
   private dispatcher = new ActionDispatcher(this.logStore);
+  private pokeStore = new PokeStore();
   private knownGroups = new Set<string>();
   private botSendActions = new Map<string, (action: string, params?: Record<string, unknown>) => Promise<ActionResult>>();
+
+  // ── 延迟 Store 初始化（首次事件时）────────────────────────────────────────
+
+  @Interceptor(5)
+  async storeInit(ctx: EventContext): Promise<void> {
+    if (this.pokeStore.isReady) return;
+    if (!ctx.store) return;
+
+    await this.pokeStore.init(ctx.store);
+
+    // 从数据库恢复配置
+    this.config = await this.pokeStore.loadConfig();
+
+    // 从数据库恢复最近日志到内存缓存
+    await this.logStore.attachStore(this.pokeStore);
+  }
+
+  // ── 戳一戳事件拦截器 ──────────────────────────────────────────────────────
 
   @Interceptor(10)
   async pokeInterceptor(ctx: EventContext): Promise<void> {
@@ -84,6 +103,8 @@ export default class PokePlugin {
     }
   }
 
+  // ── HTTP 路由 ─────────────────────────────────────────────────────────────
+
   onSetup(ctx: PluginSetupContext): void {
     ctx.route("GET", "/status", (_req, reply) => {
       const now = Date.now();
@@ -99,7 +120,7 @@ export default class PokePlugin {
       });
     });
 
-    ctx.route("POST", "/config", (req, reply) => {
+    ctx.route("POST", "/config", async (req, reply) => {
       const body = req.body as Partial<PokeConfig>;
       if (body.globalCooldown !== undefined && body.globalCooldown >= 0) {
         this.config.globalCooldown = body.globalCooldown;
@@ -113,7 +134,9 @@ export default class PokePlugin {
       if (Array.isArray(body.rules)) {
         this.config.rules = body.rules as PokeRule[];
       }
-      saveConfig(this.config);
+      if (this.pokeStore.isReady) {
+        await this.pokeStore.saveConfig(this.config);
+      }
       this.cooldown.clear();
       reply.send({ ok: true, config: this.config });
     });
@@ -124,21 +147,24 @@ export default class PokePlugin {
     });
 
     ctx.route("GET", "/groups", async (_req, reply) => {
-      const groups = Array.from(this.knownGroups).sort();
+      // knownGroups 只有 ID，没有名称，组装成 {id, name} 结构，name 初始为空
+      const groupMap = new Map<string, string>();
+      for (const id of this.knownGroups) groupMap.set(id, "");
+
       if (this.botSendActions.size > 0) {
         const sendAction = this.botSendActions.values().next().value;
         const result = await sendAction("get_group_list", {});
         if (result.ok && Array.isArray(result.data)) {
-          const remoteGroups = (result.data as Array<{ group_id: number }>)
-            .map((g) => String(g.group_id))
-            .filter((id) => !groups.includes(id));
-          for (const id of remoteGroups) {
-            this.knownGroups.add(id);
-            groups.push(id);
+          for (const g of result.data as Array<{ group_id: number; group_name?: string }>) {
+            groupMap.set(String(g.group_id), g.group_name ?? "");
           }
-          groups.sort();
         }
       }
+
+      const groups = [...groupMap.entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
       reply.send({ groups });
     });
 

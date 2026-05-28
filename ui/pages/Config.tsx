@@ -87,14 +87,16 @@ function CopyBtn({ text }: { text: string }) {
 }
 
 function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const [groups, setGroups] = useState<string[]>([])
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState("")
+  const [manualInput, setManualInput] = useState("")
 
   const fetchGroups = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch(`${API}/groups`).then((r2) => r2.json()) as { groups: string[] }
+      const r = await apiFetch(`${API}/groups`).then((r2) => r2.json()) as { groups: { id: string; name: string }[] }
       setGroups(r.groups || [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -106,50 +108,158 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
     onChange(value.includes(id) ? value.filter((g) => g !== id) : [...value, id])
   }
 
+  const addManual = () => {
+    const ids = manualInput.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean)
+    if (ids.length === 0) return
+    const next = [...value]
+    for (const id of ids) {
+      if (!next.includes(id)) next.push(id)
+    }
+    onChange(next)
+    setManualInput("")
+  }
+
+  const filtered = search.trim()
+    ? groups.filter((g) => g.id.includes(search) || g.name.toLowerCase().includes(search.toLowerCase()))
+    : groups
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((g) => value.includes(g.id))
+  const someFilteredSelected = filtered.some((g) => value.includes(g.id))
+
+  const toggleFiltered = () => {
+    if (allFilteredSelected) {
+      onChange(value.filter((id) => !filtered.some((g) => g.id === id)))
+    } else {
+      const next = [...value]
+      for (const g of filtered) {
+        if (!next.includes(g.id)) next.push(g.id)
+      }
+      onChange(next)
+    }
+  }
+
+  // resolve display label for a selected id (may have name if in fetched list)
+  const labelFor = (id: string) => {
+    const g = groups.find((x) => x.id === id)
+    return g?.name ? `${g.name} (${id})` : id
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-xs font-medium text-slate-500">限定群（空=所有群）</label>
-      <div className="flex gap-2 items-center">
-        <div className="flex-1 flex gap-1.5 flex-wrap min-h-[2.5rem] items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5">
-          {value.length === 0 && <span className="text-xs text-slate-400">未限定</span>}
-          {value.map((g) => (
-            <span key={g} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-mono">
-              {g}
-              <button onClick={() => onChange(value.filter((x) => x !== g))} className="text-slate-400 hover:text-slate-700">x</button>
-            </span>
-          ))}
+
+      {/* Selected tags */}
+      <div className="min-h-[2.5rem] flex gap-1.5 flex-wrap items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5">
+        {value.length === 0 && <span className="text-xs text-slate-400">未限定，匹配所有群</span>}
+        {value.map((id) => (
+          <span key={id} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-mono max-w-[160px]">
+            <span className="truncate" title={labelFor(id)}>{labelFor(id)}</span>
+            <button
+              onClick={() => onChange(value.filter((x) => x !== id))}
+              className="shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors"
+              title="移除"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-2.5 h-2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {/* Manual input + toggle button */}
+      <div className="flex gap-2">
+        <div className="flex-1 flex gap-1.5">
+          <input
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addManual() } }}
+            placeholder="手动输入群号，回车添加"
+            className="h-8 flex-1 min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-xs outline-none transition-all placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-100 font-mono"
+          />
+          <button
+            onClick={addManual}
+            disabled={!manualInput.trim()}
+            className="h-8 px-2.5 rounded-lg border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0"
+          >添加</button>
         </div>
-        <button onClick={() => setOpen(!open)}
-          className="shrink-0 h-10 px-3 rounded-xl border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors">
-          {open ? "收起" : "选择群"}
+        <button
+          onClick={() => setOpen(!open)}
+          className="shrink-0 h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+            <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
+          </svg>
+          {open ? "收起" : "从列表选择"}
         </button>
       </div>
+
+      {/* Dropdown list */}
       {open && (
-        <div className="rounded-xl border border-slate-200 bg-white p-3 max-h-48 overflow-y-auto">
-          {loading ? (
-            <p className="text-xs text-slate-400 text-center py-2">加载中...</p>
-          ) : groups.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-2">
-              暂无可用群列表<br />
-              <span className="text-[10px]">请在输入框中手动输入群号</span>
-            </p>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 text-xs text-slate-500 pb-1 border-b border-slate-100 mb-1">
-                <Checkbox
-                  checked={value.length === groups.length}
-                  onChange={(v) => onChange(v ? [...groups] : [])}
-                  label="全选"
-                />
-                <span className="text-slate-400">（共 {groups.length} 个群）</span>
-              </label>
-              {groups.map((g) => (
-                <label key={g} className="flex items-center gap-2 text-sm hover:bg-slate-50 -mx-1 px-2 py-0.5 rounded-lg cursor-pointer">
-                  <input type="checkbox" checked={value.includes(g)} onChange={() => toggle(g)}
-                    className="size-4 rounded border-slate-300 text-slate-900 focus:ring-slate-300" />
-                  <span className="font-mono text-xs">{g}</span>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {/* Search bar */}
+          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-slate-400 shrink-0">
+              <circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5"/>
+            </svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索群号或群名称..."
+              className="flex-1 text-xs outline-none bg-transparent placeholder:text-slate-400"
+              autoFocus
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-48 overflow-y-auto">
+            {loading ? (
+              <p className="text-xs text-slate-400 text-center py-4">加载中...</p>
+            ) : groups.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4">
+                暂无群列表，请使用上方输入框手动添加群号
+              </p>
+            ) : filtered.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-3">没有匹配「{search}」的群</p>
+            ) : (
+              <div className="flex flex-col">
+                {/* Select all (filtered) */}
+                <label className="flex items-center gap-2.5 px-3 py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50 select-none">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    ref={(el) => { if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected }}
+                    onChange={toggleFiltered}
+                    className="size-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-300 shrink-0"
+                  />
+                  <span className="text-xs text-slate-500">
+                    {search ? `全选当前筛选结果（${filtered.length}）` : `全选（共 ${groups.length} 个群）`}
+                  </span>
                 </label>
-              ))}
+                {filtered.map((g) => (
+                  <label key={g.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-slate-50 select-none">
+                    <input
+                      type="checkbox"
+                      checked={value.includes(g.id)}
+                      onChange={() => toggle(g.id)}
+                      className="size-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-300 shrink-0"
+                    />
+                    <span className="font-mono text-xs text-slate-700 shrink-0">{g.id}</span>
+                    {g.name && (
+                      <span className="text-xs text-slate-400 truncate">{g.name}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {value.length > 0 && (
+            <div className="px-3 py-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">已选 {value.length} 个群</span>
+              <button onClick={() => onChange([])} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">清空选择</button>
             </div>
           )}
         </div>
