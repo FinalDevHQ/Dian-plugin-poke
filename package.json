@@ -1,6 +1,6 @@
 {
   "name": "poke",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Dian 戳一戳插件 — 检测戳事件并执行自定义动作",
   "type": "module",
   "scripts": {

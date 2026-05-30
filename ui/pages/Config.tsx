@@ -52,21 +52,21 @@ function ActionForm({ rule, onChange }: { rule: PokeRule; onChange: (p: Partial<
     case "follow":
       return (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">跟戳目标：</span>
+          <span className="text-xs text-[var(--muted-foreground)]">跟戳目标：</span>
           <Select value={rule.followTarget} onChange={(v) => onChange({ followTarget: v as PokeRule["followTarget"] })} options={FOLLOW_OPTIONS} className="w-44" />
         </div>
       )
     case "command":
       return (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">触发指令：</span>
+          <span className="text-xs text-[var(--muted-foreground)]">触发指令：</span>
           <Input placeholder="例如: !签到" value={rule.commandText} onChange={(e) => onChange({ commandText: e.target.value })} className="font-mono max-w-64" />
         </div>
       )
     case "message":
       return (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">回复内容：</span>
+          <span className="text-xs text-[var(--muted-foreground)]">回复内容：</span>
           <Input placeholder="例如: 别戳了！" value={rule.messageText} onChange={(e) => onChange({ messageText: e.target.value })} className="max-w-64" />
         </div>
       )
@@ -80,7 +80,7 @@ function CopyBtn({ text }: { text: string }) {
     navigator.clipboard.writeText(text).catch(() => {})
   }
   return (
-    <button onClick={copy} className="text-[10px] text-slate-400 hover:text-slate-600 underline decoration-dotted shrink-0" title="点击复制示例">
+    <button onClick={copy} className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline decoration-dotted shrink-0" title="点击复制示例">
       示例
     </button>
   )
@@ -138,7 +138,6 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
     }
   }
 
-  // resolve display label for a selected id (may have name if in fetched list)
   const labelFor = (id: string) => {
     const g = groups.find((x) => x.id === id)
     return g?.name ? `${g.name} (${id})` : id
@@ -146,17 +145,16 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-slate-500">限定群（空=所有群）</label>
+      <label className="text-xs font-medium text-[var(--muted-foreground)]">限定群（空=所有群）</label>
 
-      {/* Selected tags */}
-      <div className="min-h-[2.5rem] flex gap-1.5 flex-wrap items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5">
-        {value.length === 0 && <span className="text-xs text-slate-400">未限定，匹配所有群</span>}
+      <div className="min-h-[2.5rem] flex gap-1.5 flex-wrap items-center rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-1.5">
+        {value.length === 0 && <span className="text-xs text-[var(--muted-foreground)]">未限定，匹配所有群</span>}
         {value.map((id) => (
-          <span key={id} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-mono max-w-[160px]">
+          <span key={id} className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] border border-[var(--border)] px-2 py-0.5 text-xs font-mono max-w-[160px]">
             <span className="truncate" title={labelFor(id)}>{labelFor(id)}</span>
             <button
               onClick={() => onChange(value.filter((x) => x !== id))}
-              className="shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors"
+              className="shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-full text-[var(--muted-foreground)] hover:bg-red-100 hover:text-red-500 transition-colors"
               title="移除"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-2.5 h-2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -165,7 +163,6 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
         ))}
       </div>
 
-      {/* Manual input + toggle button */}
       <div className="flex gap-2">
         <div className="flex-1 flex gap-1.5">
           <input
@@ -173,17 +170,17 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
             onChange={(e) => setManualInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addManual() } }}
             placeholder="手动输入群号，回车添加"
-            className="h-8 flex-1 min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-xs outline-none transition-all placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-100 font-mono"
+            className="h-8 flex-1 min-w-0 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 text-xs outline-none transition-all placeholder:text-[var(--muted-foreground)] focus:border-[var(--ring)] focus:ring-1 focus:ring-[var(--accent)] font-mono"
           />
           <button
             onClick={addManual}
             disabled={!manualInput.trim()}
-            className="h-8 px-2.5 rounded-lg border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0"
+            className="h-8 px-2.5 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0"
           >添加</button>
         </div>
         <button
           onClick={() => setOpen(!open)}
-          className="shrink-0 h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-500 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+          className="shrink-0 h-8 px-3 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] transition-colors flex items-center gap-1.5"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
             <rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>
@@ -192,23 +189,21 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
         </button>
       </div>
 
-      {/* Dropdown list */}
       {open && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          {/* Search bar */}
-          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-slate-400 shrink-0">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
+          <div className="px-3 py-2 border-b border-[var(--border)] flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0">
               <circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 3.5 3.5"/>
             </svg>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索群号或群名称..."
-              className="flex-1 text-xs outline-none bg-transparent placeholder:text-slate-400"
+              className="flex-1 text-xs outline-none bg-transparent placeholder:text-[var(--muted-foreground)]"
               autoFocus
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setSearch("")} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             )}
@@ -216,39 +211,38 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
 
           <div className="max-h-48 overflow-y-auto">
             {loading ? (
-              <p className="text-xs text-slate-400 text-center py-4">加载中...</p>
+              <p className="text-xs text-[var(--muted-foreground)] text-center py-4">加载中...</p>
             ) : groups.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">
+              <p className="text-xs text-[var(--muted-foreground)] text-center py-4">
                 暂无群列表，请使用上方输入框手动添加群号
               </p>
             ) : filtered.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-3">没有匹配「{search}」的群</p>
+              <p className="text-xs text-[var(--muted-foreground)] text-center py-3">没有匹配「{search}」的群</p>
             ) : (
               <div className="flex flex-col">
-                {/* Select all (filtered) */}
-                <label className="flex items-center gap-2.5 px-3 py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50 select-none">
+                <label className="flex items-center gap-2.5 px-3 py-2 border-b border-[var(--border)] cursor-pointer hover:bg-[var(--accent)] select-none">
                   <input
                     type="checkbox"
                     checked={allFilteredSelected}
                     ref={(el) => { if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected }}
                     onChange={toggleFiltered}
-                    className="size-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-300 shrink-0"
+                    className="size-3.5 rounded border-[var(--border)] text-[var(--poke-warm)] focus:ring-[var(--ring)] shrink-0"
                   />
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-[var(--muted-foreground)]">
                     {search ? `全选当前筛选结果（${filtered.length}）` : `全选（共 ${groups.length} 个群）`}
                   </span>
                 </label>
                 {filtered.map((g) => (
-                  <label key={g.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-slate-50 select-none">
+                  <label key={g.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-[var(--accent)] select-none">
                     <input
                       type="checkbox"
                       checked={value.includes(g.id)}
                       onChange={() => toggle(g.id)}
-                      className="size-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-300 shrink-0"
+                      className="size-3.5 rounded border-[var(--border)] text-[var(--poke-warm)] focus:ring-[var(--ring)] shrink-0"
                     />
-                    <span className="font-mono text-xs text-slate-700 shrink-0">{g.id}</span>
+                    <span className="font-mono text-xs text-[var(--foreground)] shrink-0">{g.id}</span>
                     {g.name && (
-                      <span className="text-xs text-slate-400 truncate">{g.name}</span>
+                      <span className="text-xs text-[var(--muted-foreground)] truncate">{g.name}</span>
                     )}
                   </label>
                 ))}
@@ -257,8 +251,8 @@ function GroupPicker({ value, onChange }: { value: string[]; onChange: (v: strin
           </div>
 
           {value.length > 0 && (
-            <div className="px-3 py-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">已选 {value.length} 个群</span>
+            <div className="px-3 py-2 border-t border-[var(--border)] flex items-center justify-between">
+              <span className="text-[11px] text-[var(--muted-foreground)]">已选 {value.length} 个群</span>
               <button onClick={() => onChange([])} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">清空选择</button>
             </div>
           )}
@@ -339,12 +333,12 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
     }
   }
 
-  if (!cfg) return <p className="text-sm text-slate-400 text-center py-12">加载中...</p>
+  if (!cfg) return <p className="text-sm text-[var(--muted-foreground)] text-center py-12">加载中...</p>
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900">规则配置</h1>
+        <h1 className="text-xl font-bold text-[var(--foreground)]">规则配置</h1>
         <Button onClick={save} disabled={saving}>
           {saving ? "保存中..." : "保存配置"}
         </Button>
@@ -355,10 +349,10 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
           <div className="flex items-center justify-between">
             <div>
               <Label>全局设置</Label>
-              <p className="text-xs text-slate-400">影响所有规则的通用配置</p>
+              <p className="text-xs text-[var(--muted-foreground)]">影响所有规则的通用配置</p>
             </div>
             <button onClick={() => setShowFormatGuide(!showFormatGuide)}
-              className="text-xs text-slate-400 hover:text-slate-600 underline decoration-dotted">
+              className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline decoration-dotted">
               {showFormatGuide ? "收起" : "格式说明"}
             </button>
           </div>
@@ -366,17 +360,17 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-500">全局冷却</label>
+              <label className="text-xs font-medium text-[var(--muted-foreground)]">全局冷却</label>
               <div className="flex items-center gap-2">
                 <Input type="number" min={0} value={cfg.globalCooldown}
                   onChange={(e) => setCfg({ ...cfg, globalCooldown: parseInt(e.target.value) || 0 })}
                   className="w-24" />
-                <span className="text-xs text-slate-400">秒（0=不限制）</span>
+                <span className="text-xs text-[var(--muted-foreground)]">秒（0=不限制）</span>
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-slate-500">禁用群号</label>
+                <label className="text-xs font-medium text-[var(--muted-foreground)]">禁用群号</label>
                 <CopyBtn text="12345678,87654321" />
               </div>
               <Input placeholder="12345678,87654321"
@@ -385,7 +379,7 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-slate-500">用户黑名单</label>
+                <label className="text-xs font-medium text-[var(--muted-foreground)]">用户黑名单</label>
                 <CopyBtn text="10001,10002,10003" />
               </div>
               <Input placeholder="10001,10002,10003"
@@ -395,11 +389,11 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
           </div>
 
           {showFormatGuide && (
-            <div className="mt-4 pt-4 border-t border-slate-100">
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                <p className="text-xs font-medium text-slate-700 mb-2">格式说明</p>
-                <p className="text-xs text-slate-500">多个值用英文逗号分隔，例如：<code className="font-mono text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200 select-all">12345678,23456789,34567890</code></p>
-                <p className="text-xs text-slate-500 mt-1">点击上方示例文字可复制到剪贴板</p>
+            <div className="mt-4 pt-4 border-t border-[var(--border)]">
+              <div className="rounded-xl bg-[var(--accent)] border border-[var(--border)] p-4">
+                <p className="text-xs font-medium text-[var(--foreground)] mb-2">格式说明</p>
+                <p className="text-xs text-[var(--muted-foreground)]">多个值用英文逗号分隔，例如：<code className="font-mono text-[var(--foreground)] bg-[var(--card)] px-1.5 py-0.5 rounded border border-[var(--border)] select-all">12345678,23456789,34567890</code></p>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">点击上方示例文字可复制到剪贴板</p>
               </div>
             </div>
           )}
@@ -409,7 +403,7 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
       <div className="flex items-center justify-between">
         <div>
           <Label className="text-base">触发规则</Label>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
             {cfg.rules.filter((r) => r.enabled).length}/{cfg.rules.length} 条启用，按顺序依次匹配
           </p>
         </div>
@@ -429,8 +423,10 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
         <Card>
           <CardContent>
             <div className="py-16 text-center">
-              <div className="text-4xl mb-3 opacity-20">📋</div>
-              <p className="text-sm text-slate-400 mb-3">还没有任何规则</p>
+              <div className="inline-flex size-16 items-center justify-center rounded-2xl bg-[var(--accent)] mb-4">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="w-8 h-8 text-[var(--muted-foreground)]"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+              </div>
+              <p className="text-sm text-[var(--muted-foreground)] mb-3">还没有任何规则</p>
               <Button variant="secondary" onClick={addRule}>+ 创建第一条规则</Button>
             </div>
           </CardContent>
@@ -441,7 +437,7 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
             const def = ACTION_DEFS.find((d) => d.value === rule.action)
             return (
               <div key={rule.id}
-                className={`rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,.04)] border-l-[3px] ${def?.color ?? "border-l-slate-300"} ${rule.enabled ? "" : "opacity-55"}`}>
+                className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_1px_3px_rgba(0,0,0,.04)] border-l-[3px] ${def?.color ?? "border-l-[var(--poke-warm)]"} ${rule.enabled ? "" : "opacity-55"} transition-shadow hover:shadow-[0_2px_6px_rgba(0,0,0,.06),0_8px_24px_rgba(0,0,0,.06)]`}>
                 <div className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <Toggle checked={rule.enabled} onChange={(v) => updateRule(rule.id, { enabled: v })} />
@@ -453,15 +449,15 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
                     </span>
                     <div className="flex items-center gap-1 ml-auto">
                       <button onClick={() => toggleAdvanced(rule.id)}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors">
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors">
                         {showAdvanced.has(rule.id) ? "收起高级" : "高级"}
                       </button>
                       <button onClick={() => duplicateRule(rule)}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors">复制</button>
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors">复制</button>
                       <button onClick={() => moveRule(idx, -1)} disabled={idx === 0}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-30">↑</button>
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-1.5 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors disabled:opacity-30">↑</button>
                       <button onClick={() => moveRule(idx, 1)} disabled={idx === cfg.rules.length - 1}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-30">↓</button>
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-1.5 py-1 rounded-lg hover:bg-[var(--accent)] transition-colors disabled:opacity-30">↓</button>
                       <button onClick={() => deleteRule(rule.id)}
                         className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors ml-1">删除</button>
                     </div>
@@ -469,7 +465,7 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
 
                   <div className="flex items-center gap-4 mt-3 flex-wrap">
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-slate-400">匹配：</span>
+                      <span className="text-xs text-[var(--muted-foreground)]">匹配：</span>
                       <Checkbox checked={rule.matchSelf} onChange={(v) => updateRule(rule.id, { matchSelf: v })} label="戳我" />
                       <Checkbox checked={rule.matchOthers} onChange={(v) => updateRule(rule.id, { matchOthers: v })} label="戳别人" />
                     </div>
@@ -479,19 +475,19 @@ export default function ConfigPage({ showToast }: { showToast: (msg: string, ok?
                   </div>
 
                   {showAdvanced.has(rule.id) && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="mt-3 pt-3 border-t border-[var(--border)] grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       <GroupPicker value={rule.groupIds} onChange={(v) => updateRule(rule.id, { groupIds: v })} />
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-slate-500">冷却时间</label>
+                        <label className="text-xs font-medium text-[var(--muted-foreground)]">冷却时间</label>
                         <div className="flex items-center gap-2">
                           <Input type="number" min={0} value={rule.cooldown}
                             onChange={(e) => updateRule(rule.id, { cooldown: parseInt(e.target.value) || 0 })}
                             className="w-24" />
-                          <span className="text-xs text-slate-400">秒（0=全局）</span>
+                          <span className="text-xs text-[var(--muted-foreground)]">秒（0=全局）</span>
                         </div>
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-slate-500">动作</label>
+                        <label className="text-xs font-medium text-[var(--muted-foreground)]">动作</label>
                         <Select value={rule.action} onChange={(v) => updateRule(rule.id, { action: v as PokeRule["action"] })} options={ACTION_OPTIONS} />
                       </div>
                     </div>

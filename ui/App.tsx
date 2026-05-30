@@ -27,16 +27,16 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc]">
-      <aside className="w-56 shrink-0 border-r border-slate-200 bg-white flex flex-col">
-        <div className="px-5 py-5 border-b border-slate-100">
+    <div className="flex h-screen bg-[var(--background)]">
+      <aside className="w-56 shrink-0 border-r border-[var(--border)] bg-[var(--card)] flex flex-col">
+        <div className="px-5 py-5 border-b border-[var(--border)]">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white text-sm shadow-sm">
-              👉
+            <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--poke-warm)] to-[var(--primary)] text-white text-sm shadow-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
             </div>
             <div>
-              <div className="text-sm font-semibold text-slate-900">戳一戳</div>
-              <div className="text-[10px] text-slate-400">Poke Plugin</div>
+              <div className="text-sm font-semibold text-[var(--foreground)]">戳一戳</div>
+              <div className="text-[10px] text-[var(--muted-foreground)]">Poke Plugin</div>
             </div>
           </div>
         </div>
@@ -47,8 +47,8 @@ export default function App() {
               onClick={() => setPage(n.id)}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-left ${
                 page === n.id
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm"
+                  : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
               }`}
             >
               {n.icon}
@@ -56,8 +56,8 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-slate-100">
-          <div className="text-[10px] text-slate-400 text-center">Dian Plugin System</div>
+        <div className="px-5 py-4 border-t border-[var(--border)]">
+          <div className="text-[10px] text-[var(--muted-foreground)] text-center">Dian Plugin System</div>
         </div>
       </aside>
 
@@ -68,11 +68,14 @@ export default function App() {
       </main>
 
       {toast && (
-        <div className={`fixed bottom-4 right-4 rounded-xl border px-4 py-2.5 text-sm font-medium shadow-lg ${
-          toast.ok
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-red-200 bg-red-50 text-red-700"
-        }`}>
+        <div
+          className={`fixed bottom-4 right-4 rounded-xl border px-4 py-2.5 text-sm font-medium shadow-lg ${
+            toast.ok
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+          style={{ animation: "toast-in 0.3s ease-out" }}
+        >
           {toast.ok ? "\u2713" : "\u2717"} {toast.msg}
         </div>
       )}
